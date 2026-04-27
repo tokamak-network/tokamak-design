@@ -41,11 +41,11 @@ export async function capturePage(
       });
       const page = await context.newPage();
 
-      await page.goto(url, { waitUntil: "load", timeout: timeoutMs });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
       await page
-        .waitForLoadState("networkidle", { timeout: 5_000 })
+        .waitForLoadState("networkidle", { timeout: 8_000 })
         .catch(() => undefined);
-      await page.waitForTimeout(800);
+      await page.waitForTimeout(1_200);
 
       const [viewportBuf, fullPageBuf, extracted] = await Promise.all([
         page.screenshot({ type: "png" }),
