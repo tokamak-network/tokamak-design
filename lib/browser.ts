@@ -1,9 +1,9 @@
-import { chromium, type Page } from "playwright";
+import { chromium, type BrowserContext, type Page } from "playwright";
 
 export interface Screenshots {
   /** Viewport-only — sent to the AI for analysis (better token efficiency). */
   viewport: string;
-  /** Full scrollable page — shown in the lightbox. */
+  /** Capped full page — shown in the lightbox. */
   fullPage: string;
 }
 
@@ -12,13 +12,58 @@ export interface PageCapture {
   markdown: string;
 }
 
+const VIEWPORT_WIDTH = 1280;
+const VIEWPORT_HEIGHT = 800;
+const FULL_PAGE_MAX_HEIGHT = 4000;
+
+/**
+ * Third-party hosts whose responses don't influence rendering but routinely
+ * keep the network "busy" past `networkidle`. Aborting them lets us finish
+ * waiting sooner and shaves seconds off heavy SaaS landing pages.
+ */
+const BLOCKED_HOST_FRAGMENTS = [
+  "google-analytics.com",
+  "googletagmanager.com",
+  "doubleclick.net",
+  "facebook.net",
+  "connect.facebook.net",
+  "hotjar.com",
+  "static.hotjar.com",
+  "intercom.io",
+  "intercomcdn.com",
+  "segment.com",
+  "segment.io",
+  "amplitude.com",
+  "mixpanel.com",
+  "fullstory.com",
+  "clarity.ms",
+  "hs-scripts.com",
+  "hubspot.com",
+  "pardot.com",
+  "marketo.net",
+  "linkedin.com/li/track",
+  "tiktok.com/i18n/pixel",
+  "snap.licdn.com",
+];
+
+async function blockTrackers(context: BrowserContext): Promise<void> {
+  await context.route("**/*", (route) => {
+    const url = route.request().url();
+    if (BLOCKED_HOST_FRAGMENTS.some((frag) => url.includes(frag))) {
+      route.abort().catch(() => undefined);
+      return;
+    }
+    route.continue().catch(() => undefined);
+  });
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Capture viewport + full-page screenshots and page text using a locally
- * launched Chromium. No remote service, no quotas.
+ * Capture viewport + capped full-page screenshots and page text using a
+ * locally launched Chromium. No remote service, no quotas.
  */
 export async function capturePage(
   url: string,
@@ -41,10 +86,11 @@ export async function capturePage(
       progress("Launching browser");
       browser = await chromium.launch({ headless: true });
       const context = await browser.newContext({
-        viewport: { width: 1920, height: 1080 },
+        viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
         userAgent:
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       });
+      await blockTrackers(context);
       const page = await context.newPage();
 
       progress("Navigating to URL");
@@ -56,12 +102,24 @@ export async function capturePage(
         .catch(() => undefined);
       await page.waitForTimeout(1_200);
 
-      progress("Capturing screenshots");
-      const [viewportBuf, fullPageBuf, extracted] = await Promise.all([
+      progress("Capturing viewport + extracting text");
+      const [viewportBuf, extracted] = await Promise.all([
         page.screenshot({ type: "png" }),
-        page.screenshot({ type: "png", fullPage: true }),
         extractPageText(page),
       ]);
+
+      progress("Capturing full page");
+      const fullPageHeight = Math.min(
+        await page
+          .evaluate(() => document.documentElement.scrollHeight || 0)
+          .catch(() => VIEWPORT_HEIGHT),
+        FULL_PAGE_MAX_HEIGHT
+      );
+      await page.setViewportSize({
+        width: VIEWPORT_WIDTH,
+        height: Math.max(fullPageHeight, VIEWPORT_HEIGHT),
+      });
+      const fullPageBuf = await page.screenshot({ type: "png" });
 
       progress("Done");
       return {
