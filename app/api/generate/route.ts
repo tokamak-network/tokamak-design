@@ -65,7 +65,12 @@ export async function POST(request: NextRequest) {
           send({ type: "model", name: getModelName() });
           send({ type: "step", step: 0 });
 
-          const { screenshots, markdown: scrapedMarkdown } = await capturePage(url);
+          const { screenshots, markdown: scrapedMarkdown } = await capturePage(
+            url,
+            {
+              onProgress: (text) => send({ type: "substep", text }),
+            }
+          );
 
           send({ type: "screenshot", data: screenshots.viewport });
           send({ type: "fullpage", data: screenshots.fullPage });

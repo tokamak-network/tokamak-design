@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import UrlInput from "@/components/url-input";
 import CodeOutput from "@/components/code-output";
@@ -24,8 +24,21 @@ export default function Home() {
   const [fullPageDataUrl, setFullPageDataUrl] = useState("");
   const [error, setError] = useState("");
   const [modelName, setModelName] = useState("...");
+  const [subStep, setSubStep] = useState("");
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const startedAtRef = useRef<number>(0);
 
   const loadingLabel = buildLoadingSteps(modelName)[stepIdx];
+
+  useEffect(() => {
+    if (!loading) return;
+    startedAtRef.current = Date.now();
+    setElapsedSec(0);
+    const id = setInterval(() => {
+      setElapsedSec(Math.round((Date.now() - startedAtRef.current) / 1000));
+    }, 250);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const handleGenerate = async () => {
     const trimmed = url.trim();
@@ -33,6 +46,7 @@ export default function Home() {
 
     setLoading(true);
     setStepIdx(0);
+    setSubStep("");
     setError("");
     setDesignMd("");
     setTokens(null);
@@ -72,6 +86,9 @@ export default function Home() {
 
           if (event.type === "step") {
             setStepIdx(event.step);
+            setSubStep("");
+          } else if (event.type === "substep") {
+            setSubStep(event.text);
           } else if (event.type === "model") {
             setModelName(event.name);
           } else if (event.type === "screenshot") {
@@ -187,11 +204,8 @@ export default function Home() {
                   const state =
                     i < stepIdx ? "done" : i === stepIdx ? "active" : "pending";
                   return (
-                    <li
-                      key={label}
-                      className="flex items-center gap-3 text-sm"
-                    >
-                      <span className="shrink-0 w-4 h-4 flex items-center justify-center">
+                    <li key={label} className="flex items-start gap-3 text-sm">
+                      <span className="shrink-0 w-4 h-4 mt-0.5 flex items-center justify-center">
                         {state === "done" && (
                           <Check size={14} className="text-gray-900" strokeWidth={2.5} />
                         )}
@@ -202,16 +216,25 @@ export default function Home() {
                           <Circle size={8} className="text-gray-300" fill="currentColor" />
                         )}
                       </span>
-                      <span
-                        className={
-                          state === "done"
-                            ? "text-gray-500"
-                            : state === "active"
-                            ? "text-gray-900 font-medium"
-                            : "text-gray-400"
-                        }
-                      >
-                        {label}
+                      <span className="flex-1 min-w-0">
+                        <span
+                          className={
+                            state === "done"
+                              ? "text-gray-500"
+                              : state === "active"
+                              ? "text-gray-900 font-medium"
+                              : "text-gray-400"
+                          }
+                        >
+                          {label}
+                        </span>
+                        {state === "active" && (
+                          <span className="block mt-1 text-xs text-gray-500 tabular-nums">
+                            {subStep && <span>{subStep}</span>}
+                            {subStep && <span className="mx-1.5 text-gray-300">·</span>}
+                            <span>{elapsedSec}s</span>
+                          </span>
+                        )}
                       </span>
                     </li>
                   );

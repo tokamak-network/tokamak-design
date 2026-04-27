@@ -22,10 +22,15 @@ function sleep(ms: number): Promise<void> {
  */
 export async function capturePage(
   url: string,
-  options: { timeoutMs?: number; retries?: number } = {}
+  options: {
+    timeoutMs?: number;
+    retries?: number;
+    onProgress?: (text: string) => void;
+  } = {}
 ): Promise<PageCapture> {
   const timeoutMs = options.timeoutMs ?? 60_000;
   const retries = options.retries ?? 2;
+  const progress = options.onProgress ?? (() => {});
 
   let attempt = 0;
   let lastError: unknown;
@@ -33,6 +38,7 @@ export async function capturePage(
   while (attempt <= retries) {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     try {
+      progress("Launching browser");
       browser = await chromium.launch({ headless: true });
       const context = await browser.newContext({
         viewport: { width: 1920, height: 1080 },
@@ -41,18 +47,23 @@ export async function capturePage(
       });
       const page = await context.newPage();
 
+      progress("Navigating to URL");
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+
+      progress("Waiting for content to settle");
       await page
         .waitForLoadState("networkidle", { timeout: 8_000 })
         .catch(() => undefined);
       await page.waitForTimeout(1_200);
 
+      progress("Capturing screenshots");
       const [viewportBuf, fullPageBuf, extracted] = await Promise.all([
         page.screenshot({ type: "png" }),
         page.screenshot({ type: "png", fullPage: true }),
         extractPageText(page),
       ]);
 
+      progress("Done");
       return {
         screenshots: {
           viewport: viewportBuf.toString("base64"),
