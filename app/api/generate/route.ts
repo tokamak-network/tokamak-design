@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { capturePage } from "@/lib/browser";
 import { generateDesignMdStream, getModelName } from "@/lib/llm";
 import { parseDesignFrontmatter } from "@/lib/design-md";
+import { normalizeUrl } from "@/lib/url";
 
 /** Extract a short headline and a body snippet from scraped markdown. */
 function extractPageCopy(md: string): { heading: string; body: string } {
@@ -30,26 +31,19 @@ function extractPageCopy(md: string): { heading: string; body: string } {
 
 export const maxDuration = 120; // Allow up to 2 minutes for the entire process
 
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const url = typeof body?.url === "string" ? body.url.trim() : "";
+    const rawUrl = typeof body?.url === "string" ? body.url : "";
 
-    if (!url) {
+    if (!rawUrl.trim()) {
       return NextResponse.json({ error: "URL is required" }, { status: 400 });
     }
-    if (!isValidHttpUrl(url)) {
+
+    const url = normalizeUrl(rawUrl);
+    if (!url) {
       return NextResponse.json(
-        { error: "Please provide a valid http(s) URL" },
+        { error: "Please provide a valid URL (e.g. base.org or https://base.org)" },
         { status: 400 }
       );
     }

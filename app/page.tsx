@@ -179,18 +179,14 @@ export default function Home() {
         {!designMd && !loading && (
           <div className="mb-10 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
             <span className="text-gray-400">Try</span>
-            {[
-              "https://tokamak.network",
-              "https://vercel.com",
-              "https://linear.app",
-            ].map((example) => (
+            {["tokamak.network", "vercel.com", "linear.app"].map((example) => (
               <button
                 key={example}
                 type="button"
                 onClick={() => setUrl(example)}
                 className="px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 hover:text-black hover:border-gray-300 transition-colors"
               >
-                {example.replace(/^https?:\/\//, "")}
+                {example}
               </button>
             ))}
           </div>

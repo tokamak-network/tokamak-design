@@ -33,10 +33,14 @@ export default function UrlInput({
         </div>
 
         <input
-          type="url"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="https://example.com"
+          placeholder="base.org or https://example.com"
           className="w-full px-4 py-4 text-base sm:text-lg bg-transparent border-none outline-none placeholder:text-gray-400 text-black"
           disabled={loading}
           required
